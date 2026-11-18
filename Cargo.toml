@@ -1,0 +1,24 @@
+[workspace]
+resolver = "3"
+members = ["probe", "probe-dep", "example"]
+# `probe` fails clippy on purpose, so plain `cargo clippy` and `cargo test` only look at `example`.
+default-members = ["example"]
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────
+# Copy this table into your own Cargo.toml, and clippy.toml next to it.
+#
+#   single package:  rename the header to [lints.clippy]
+#   workspace:       keep the header, and add `[lints] workspace = true` to every member
+#
+# `panic`, `todo`, `unimplemented`, `unreachable`, `unwrap_used`, `expect_used`, `print_stdout`,
+# `print_stderr` and `dbg_macro` are deliberately not here: clippy.toml bans the same things,
+# and most of those lints miss what is wrapped in another macro.
+# ─────────────────────────────────────────────────────────────────────────────────────────────
+[workspace.lints.clippy]
+# Enforce the ban lists in clippy.toml.
+disallowed_macros = "deny"
+disallowed_methods = "deny"
+# Operators cannot be named in clippy.toml. These three lints cover them.
+indexing_slicing = "deny"        # v[i], &v[a..b], map[&key]
+string_slice = "deny"            # &s[a..b]
+arithmetic_side_effects = "deny" # + - * / % and unary -, on integers, Duration, Instant, SystemTime

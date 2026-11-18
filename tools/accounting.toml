@@ -1,0 +1,336 @@
+# Input of tools/audit.py.
+#
+# clippy.toml bans most of what the standard library documents as panicking. This file accounts
+# for the rest, and for the entries of clippy.toml that go beyond the documentation.
+#
+# Items are clippy paths, or the impl for trait implementations. `{int}`, `{signed}` and
+# `{unsigned}` stand for the integer types, `*` for anything.
+
+# ── Documented panics that an operator lint covers ───────────────────────────────────────────
+
+[[lint]]
+lint = "arithmetic_side_effects"
+note = "Operators."
+items = [
+    "impl Div for {int}",
+    "impl Rem for {int}",
+    "impl Add<Duration> for Instant::add",
+    "impl Add<Duration> for SystemTime::add",
+    "impl Sub for Instant::sub",
+]
+
+[[lint]]
+lint = "string_slice"
+note = "`&s[range]`."
+items = ["impl SliceIndex<str> for *"]
+
+[[lint]]
+lint = "indexing_slicing"
+note = "`map[&key]`. The lint flags an owned map or a field, but not a map behind a reference: a known gap."
+items = ["impl Index<&Q> for BTreeMap<K, V, A>::index", "impl Index<&Q> for HashMap<K, V, S, A>::index"]
+
+# ── Documented panics that are deliberately not banned ───────────────────────────────────────
+
+[[skip]]
+title = "Growing a collection"
+reason = """
+These panic when the new capacity exceeds `isize::MAX` bytes ("capacity overflow"). A request \
+that is merely larger than the memory available normally does not panic: it aborts the process, \
+and no lint can prevent that, so a ban would only cover the less likely half of the problem. \
+Where a size comes from outside, call `try_reserve` first. The optional block at the end of \
+clippy.toml bans the functions that take a size (`with_capacity`, `reserve`, `resize`, `repeat` \
+and others)."""
+items = [
+    "alloc::collections::binary_heap::BinaryHeap::reserve",
+    "alloc::collections::binary_heap::BinaryHeap::reserve_exact",
+    "alloc::collections::vec_deque::VecDeque::append",
+    "alloc::collections::vec_deque::VecDeque::reserve",
+    "alloc::collections::vec_deque::VecDeque::reserve_exact",
+    "alloc::string::String::push",
+    "alloc::string::String::push_str",
+    "alloc::string::String::reserve",
+    "alloc::string::String::reserve_exact",
+    "alloc::string::String::with_capacity",
+    "alloc::vec::Vec::append",
+    "alloc::vec::Vec::extend_from_slice",
+    "alloc::vec::Vec::push",
+    "alloc::vec::Vec::push_mut",
+    "alloc::vec::Vec::reserve",
+    "alloc::vec::Vec::reserve_exact",
+    "alloc::vec::Vec::resize",
+    "alloc::vec::Vec::resize_with",
+    "alloc::vec::Vec::with_capacity",
+    "alloc::vec::Vec::with_capacity_in",
+    "std::collections::HashMap::reserve",
+    "std::collections::HashSet::reserve",
+    "slice::repeat",
+    "str::repeat",
+]
+
+[[skip]]
+title = "Code you pass in breaks a contract"
+reason = """
+These panic when code supplied by the caller breaks a documented contract: an `Ord` that is not \
+a total order (the `sort` family; `a.partial_cmp(b).unwrap_or(Equal)` on floats is the usual \
+culprit), a `Display` that returns an error (`format!`, `to_string`), a `Seek` that reports a \
+wrong position, a future that is polled again after it has finished, a `Condvar` used with two \
+mutexes, a `Drop` that panics. The functions are far too common to ban, and a ban would not \
+point at the code that is at fault."""
+items = [
+    "slice::sort",
+    "slice::sort_by",
+    "slice::sort_by_cached_key",
+    "slice::sort_by_key",
+    "slice::sort_unstable",
+    "slice::sort_unstable_by",
+    "slice::sort_unstable_by_key",
+    "alloc::format",
+    "impl ToString for T",
+    "impl Seek for BufReader<R>::stream_position",
+    "core::future::Future::poll",
+    "std::sync::Condvar::wait",
+    "core::ops::Drop::drop",
+]
+
+[[skip]]
+title = "A panic that is passed on"
+reason = """
+These only pass on a panic that came out of a closure or initializer given to them, refuse to \
+work after such a panic (poisoning), or apply only while the thread is already panicking \
+(`set_hook`, `take_hook`). The first panic is the one to prevent. An initializer that reads \
+the `LazyCell` it is initializing also ends up here; with a `LazyLock` it deadlocks instead."""
+items = [
+    "alloc::rc::Rc::new_cyclic",
+    "alloc::sync::Arc::new_cyclic",
+    "core::cell::LazyCell::force",
+    "core::cell::LazyCell::force_mut",
+    "impl Deref for LazyCell<T, F>::deref",
+    "impl DerefMut for LazyCell<T, F>::deref_mut",
+    "std::sync::LazyLock::force",
+    "std::sync::LazyLock::force_mut",
+    "impl Deref for LazyLock<T, F>::deref",
+    "impl DerefMut for LazyLock<T, F>::deref_mut",
+    "std::sync::Once::call_once",
+    "std::sync::Once::wait",
+    "std::sync::OnceLock::get_or_init",
+    "std::thread::LocalKey::try_with",
+    "std::thread::scope",
+    "std::panic::set_hook",
+    "std::panic::take_hook",
+]
+
+[[skip]]
+title = "Trait implementations, which clippy.toml cannot name"
+reason = """
+`RefCell`'s `Clone`, `PartialEq`, `PartialOrd` and `Ord` panic while the value is mutably \
+borrowed. clippy.toml can name a trait method only for all types at once, and banning `clone` \
+or `==` everywhere is not an option. The range conversion panics only for a range that has \
+been partly iterated."""
+items = [
+    "impl Clone for RefCell<T>::*",
+    "impl PartialEq for RefCell<T>::eq",
+    "impl PartialOrd for RefCell<T>::*",
+    "impl Ord for RefCell<T>::cmp",
+    "impl From<RangeInclusive<T>> for RangeInclusive<T>::from",
+]
+
+[[skip]]
+title = "More items than `usize::MAX`, or infinitely many"
+reason = """
+These need more than `usize::MAX` items, or an iterator that never ends. Two shapes get there \
+without iterating: a range with that many items, as in `(0_u128..n).count()` or \
+`(0..=usize::MAX).count()`, and `iter::repeat(x).count()`, which clippy's deny-by-default \
+`infinite_iter` lint flags. Banning \
+`count`, `last`, `position` and `enumerate` for every iterator would cost far more than that is \
+worth."""
+items = [
+    "core::iter::Iterator::count",
+    "core::iter::Iterator::enumerate",
+    "core::iter::Iterator::last",
+    "core::iter::Iterator::position",
+    "impl Iterator for Enumerate<I>::next",
+    "impl Iterator for Repeat<A>::count",
+    "impl Iterator for Repeat<A>::last",
+]
+
+[[skip]]
+title = "Atomic orderings"
+reason = """
+`load`, `store` and the fences panic for an ordering that makes no sense for the operation. \
+rustc's deny-by-default `invalid_atomic_ordering` lint rejects such an ordering when it is \
+written as a constant, which is how orderings are normally written. One that is chosen at run \
+time still panics."""
+items = [
+    "core::sync::atomic::Atomic*::load",
+    "core::sync::atomic::Atomic*::store",
+    "core::sync::atomic::fence",
+    "core::sync::atomic::compiler_fence",
+]
+
+[[skip]]
+title = "Locks and joins"
+reason = """
+Documented as "may panic" when the current thread already holds the lock, or joins itself. \
+Whether that panics or deadlocks depends on the platform, and there is no other API to switch to."""
+items = [
+    "std::sync::Mutex::lock",
+    "std::sync::RwLock::read",
+    "std::sync::RwLock::write",
+    "std::thread::JoinHandle::join",
+]
+
+[[skip]]
+title = "Thread names"
+reason = """
+`Builder::spawn` is what the ban on `thread::spawn` sends you to. It panics only if the name \
+set with `Builder::name` contains a NUL byte."""
+items = ["std::thread::Builder::spawn", "std::thread::Builder::spawn_scoped"]
+
+[[skip]]
+title = "Zero-sized types and const generics"
+reason = """
+The first group panics only for zero-sized element types, or (`Cell::swap`) for overlapping \
+cells that safe code cannot create. The second panics if the const generic `N` is zero, so a \
+given call either always panics or never does, and rustc's deny-by-default `unconditional_panic` \
+lint rejects a literal `0`."""
+items = [
+    "alloc::vec::Vec::into_flattened",
+    "slice::as_flattened",
+    "slice::as_flattened_mut",
+    "slice::element_offset",
+    "slice::subslice_range",
+    "core::cell::Cell::swap",
+    "slice::array_windows",
+    "slice::as_chunks",
+    "slice::as_chunks_mut",
+    "slice::as_rchunks",
+    "slice::as_rchunks_mut",
+]
+
+[[skip]]
+title = "Platform-specific, or reserved for the future"
+reason = """
+`split_paths` panics on platforms without a `PATH`-like variable (UEFI), `IoSlice::new` on \
+Windows for a buffer above 4 GiB. `Instant::duration_since` and `elapsed` saturate today; the \
+documentation only reserves the right to panic again. `LocalKey::get` and `update` require \
+`T: Copy`, and a `Copy` type has no destructor, so with native thread-local storage the key \
+never reaches the destroyed state in which they would panic."""
+items = [
+    "std::env::split_paths",
+    "std::io::IoSlice::new",
+    "std::io::IoSliceMut::new",
+    "std::time::Instant::duration_since",
+    "std::time::Instant::elapsed",
+    "std::thread::LocalKey::get",
+    "std::thread::LocalKey::update",
+]
+
+[[skip]]
+title = "Only after a banned call"
+reason = "`finish` panics if a `key` was not followed by a `value`. `key` and `value` are banned in favour of `entry`."
+items = ["core::fmt::DebugMap::finish"]
+
+[[skip]]
+title = "Only during constant evaluation"
+reason = "These panic only when they are evaluated at compile time, which makes it a compile error."
+items = ["const_ptr::is_null", "mut_ptr::is_null", "core::ptr::NonNull::new"]
+
+[[skip]]
+title = "`unsafe` functions"
+reason = "Misusing an `unsafe` function is undefined behaviour. That is a different problem from a panic, with different tools."
+items = [
+    "const_ptr::as_ref",
+    "const_ptr::offset_from",
+    "const_ptr::offset_from_unsigned",
+    "mut_ptr::as_mut",
+    "mut_ptr::as_ref",
+    "mut_ptr::offset_from",
+    "mut_ptr::offset_from_unsigned",
+    "core::ptr::NonNull::offset_from",
+    "core::ptr::NonNull::offset_from_unsigned",
+    "core::mem::conjure_zst",
+    "std::os::fd::BorrowedFd::borrow_raw",
+    "impl FromRawFd for OwnedFd::from_raw_fd",
+    "std::thread::Builder::spawn_unchecked",
+]
+
+[[skip]]
+title = "Unstable"
+reason = "The documented panic is in `ExitStatusError::from_raw`, and `ExitStatusError` is unstable."
+items = ["std::os::unix::process::ExitStatusExt::from_raw"]
+
+# ── Entries of clippy.toml whose documentation has no "Panics" section ───────────────────────
+
+[[undocumented]]
+note = "The panic is described in the text, not under a heading."
+items = [
+    "core::assert",
+    "core::assert_eq",
+    "core::assert_ne",
+    "core::assert_matches",
+    "core::debug_assert",
+    "core::debug_assert_eq",
+    "core::debug_assert_ne",
+    "core::debug_assert_matches",
+    "std::panic::panic_any",
+    "std::panic::resume_unwind",
+    "{unsigned}::next_power_of_two",
+]
+
+[[undocumented]]
+note = "Documented under \"Overflow behavior\"."
+items = ["{signed}::abs", "core::num::NonZero::abs"]
+
+[[undocumented]]
+note = "Not documented at all. Found by calling every integer method with boundary values: `pow` overflows like `*` does."
+items = ["{int}::pow"]
+
+[[undocumented]]
+note = "Not documented. A free function that forwards to `char::from_digit`."
+items = ["core::char::from_digit"]
+
+[[undocumented]]
+note = "Not documented. They forward to `PathBuf::set_extension` and `PathBuf::add_extension`."
+items = ["std::path::Path::with_extension", "std::path::Path::with_added_extension"]
+
+[[undocumented]]
+note = "The documentation calls too large an amount a logic error, and does not say that slices and `VecDeque` panic on it."
+items = ["std::io::BufRead::consume"]
+
+[[undocumented]]
+note = "Not documented. Both unwrap the result of reading what the child wrote, so a failed read panics; the usual cause is output that does not fit in memory."
+items = ["std::process::Command::output", "std::process::Child::wait_with_output"]
+
+[[undocumented]]
+note = "What `Iterator::sum` and `Iterator::product` call."
+items = ["core::iter::Sum::sum", "core::iter::Product::product"]
+
+[[undocumented]]
+note = "Operators called by name, as in `fold(0, u32::add)`. The panics are documented on the implementations, and apart from method calls on integers the operator lints only see operator syntax."
+items = [
+    "core::ops::Add::add",
+    "core::ops::Sub::sub",
+    "core::ops::Mul::mul",
+    "core::ops::Div::div",
+    "core::ops::Rem::rem",
+    "core::ops::Neg::neg",
+    "core::ops::Shl::shl",
+    "core::ops::Shr::shr",
+    "core::ops::*Assign::*",
+]
+
+# ── Reviewed: documentation that links to a banned function, on an item that cannot panic ────
+
+[[reviewed]]
+items = [
+    "alloc::vec::Vec::dedup_by",
+    "alloc::vec::Vec::truncate",
+    "core::num::NonZero::ilog2",
+    "core::num::NonZero::ilog10",
+    "{int}::leading_zeros",
+    "std::io::BufRead::fill_buf",
+    "std::process::Command::new",
+    "std::process::Command::stdin",
+    "std::process::Command::stdout",
+    "std::process::Command::stderr",
+]

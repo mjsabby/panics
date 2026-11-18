@@ -1,0 +1,8 @@
+[package]
+name = "probe-dep"
+version = "0.1.0"
+edition = "2024"
+description = "Stands in for a third-party dependency of the probe crate; it is not linted"
+
+# Deliberately empty: this crate stands for code that the workspace lints do not apply to.
+[lints]

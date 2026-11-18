@@ -1,0 +1,8 @@
+[package]
+name = "example"
+version = "0.1.0"
+edition = "2024"
+description = "Code that passes the lints in this repository: the usual replacements for the banned constructs"
+
+[lints]
+workspace = true

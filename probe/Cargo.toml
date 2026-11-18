@@ -1,0 +1,12 @@
+[package]
+name = "probe"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.100"
+description = "Snippets that panic, to prove what the lints in this repository catch and what they miss"
+
+[dependencies]
+probe-dep = { path = "../probe-dep" }
+
+[lints]
+workspace = true
