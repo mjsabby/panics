@@ -54,13 +54,13 @@ pub fn shift_left(a: u32, n: u32) -> u32 { a << n }
 pub fn shift_right(a: u32, n: u32) -> u32 { a >> n }
 /// The same for `<<=`.
 pub fn shift_assign(mut a: u32, n: u32) -> u32 { a <<= n; a }
-/// `arithmetic_side_effects` accepts division by any non-zero literal, but `MIN / -1` overflows, in every build.
+/// `arithmetic_side_effects` accepts division by any non-zero literal, but `MIN / -1` overflows, in every build. The optional `integer_division_remainder_used` flags it.
 pub fn divide_by_minus_one(a: i32) -> i32 { a / -1 }
 /// It reads the literal `-1` as 1, so multiplying by it passes too. `MIN * -1` overflows.
 pub fn times_minus_one(mut x: i64) -> i64 { x *= -1; x }
 /// It takes a literal `0` next to `-` for a no-op. `0 - x` overflows for `MIN`, and for every unsigned `x` but 0.
 pub fn zero_minus(x: i32) -> i32 { 0 - x }
-/// It skips everything inside a `static` or `const` item, including closures that run later.
+/// It skips everything inside a `static` or `const` item, including closures that run later. The optional `integer_division_remainder_used` flags the divisions there.
 pub fn arithmetic_in_static(i: usize, a: u32, b: u32) -> u32 { static OPS: [fn(u32, u32) -> u32; 2] = [|a, b| a / b, |a, b| a % b]; OPS.get(i).map_or(0, |op| op(a, b)) }
 /// `indexing_slicing` gives up on an array whose length is a const generic, for ranges and for constant indexes.
 pub fn const_generic_array_range<const N: usize>(a: &[u8; N], n: usize) -> &[u8] { &a[..n] }

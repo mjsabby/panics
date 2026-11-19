@@ -9,7 +9,8 @@ Runs clippy on `probe`, runs the probe's harness in a debug and a release build,
   * every known gap still panics and is still flagged by nothing;
   * `example`, the crate of compliant code, passes clippy with warnings denied, and its tests pass;
   * a `no_std` crate gets the `core` entries and no complaints about the others;
-  * the commented-out entries at the end of clippy.toml name things that exist.
+  * the commented-out entries at the end of clippy.toml name things that exist, and the
+    commented-out lint in Cargo.toml flags the two gaps it is offered for.
 
     tools/verify.py            # check; exit status 1 if anything is off
     tools/verify.py --update   # check, then rewrite docs/COVERAGE.md
@@ -199,6 +200,18 @@ def check_optional_block(failures: list[str]) -> None:
         failures.append(f"optional block of clippy.toml: clippy complained when it was enabled: {other}")
 
 
+def check_optional_lint(failures: list[str], known: dict[str, Snippet]) -> None:
+    """The lint that is commented out in Cargo.toml has to close the two gaps it is offered for."""
+    lint = "integer_division_remainder_used"
+    if f'# {lint} = "deny"' not in (ROOT / "Cargo.toml").read_text(encoding="utf-8"):
+        failures.append(f"Cargo.toml: the optional line for {lint} is missing")
+    diagnostics, _ = clippy("probe", ["--", "-W", f"clippy::{lint}"])
+    for function in ("gaps::divide_by_minus_one", "gaps::arithmetic_in_static"):
+        s = known[function]
+        if not any(d.lint == lint and d.file == s.file and s.first_line <= d.line <= s.last_line for d in diagnostics):
+            failures.append(f"optional lint {lint}: does not flag {function}")
+
+
 def check_example(failures: list[str]) -> None:
     lint = run(["cargo", "clippy", "--quiet", "-p", "example", "--all-targets", "--", "-D", "warnings"])
     if lint.returncode != 0:
@@ -265,6 +278,7 @@ def verify():
     check_example(failures)
     check_no_std(failures)
     check_optional_block(failures)
+    check_optional_lint(failures, known)
     return failures, bans, known, debug, release_panics
 
 

@@ -96,11 +96,43 @@ arrayvec, httparse) as a trial, the configuration reported one finding for every
 mostly indexing, arithmetic and assertions. It is easiest to adopt for new code, or one crate
 at a time, with `warn` instead of `deny` while the count comes down.
 
+### What it costs
+
+Almost nothing, with one exception.
+
+- **Linting.** Measured on a 106-line and a 108,000-line crate: about 2 ms per crate to load
+  the ban list, and 2 to 4% more time for a `cargo clippy` run.
+- **Building.** Nothing. `cargo build` and `cargo test` do not run clippy. Editing the lint
+  table in `Cargo.toml` rebuilds the crate once; editing `clippy.toml` rebuilds nothing.
+- **Running.** What the lints make you write costs the same as what it replaces: `v.get(i)?`
+  does the bounds check that `v[i]` does, and `checked_div` the test for zero that `/` does.
+  The exception is adding up integers in a hot loop. `sum()` is banned because it overflows
+  like `+`, and the obvious replacement, `try_fold` with `checked_add`, stops at the first
+  overflow. A loop that can stop early is not vectorized:
+
+  | Adding up a `&[u32]` | ns per value | On overflow |
+  |---|---:|---|
+  | `iter().sum()` (banned) | 0.045 | panics with overflow checks on, wraps with them off |
+  | `try_fold(0, \|a, v\| a.checked_add(*v))` | 0.181 | returns `None` |
+  | `fold(0, \|a, v\| a.wrapping_add(*v))` | 0.045 | wraps |
+  | `fold(0_u64, \|a, v\| a.wrapping_add(u64::from(*v)))`, then `u32::try_from` | 0.086 | returns `None` |
+
+  The checked form is four times slower here, and seven times with `-C target-cpu=native`;
+  for `u64` values it is about twice as slow. So where a sum is hot, either wrap, if wrapping
+  is acceptable (it is what `sum()` does in a release build), or add into a wider type that
+  cannot overflow and convert back at the end, which with `-C target-cpu=native` is as fast as
+  `sum()`. [`example/examples/reduction.rs`](example/examples/reduction.rs) has the four
+  forms, and `cargo run --release --example reduction` times them on your machine.
+
 ### Good to know
 
 - **A group-level `allow` switches the lints off without naming them.** `#[allow(clippy::all)]`
   and `#[allow(clippy::style)]` disable the two ban lints; `#[allow(clippy::restriction)]`
   disables the three operator lints. Search for `allow(clippy::` as well as `expect(clippy::`.
+- **`forbid` instead of `deny`** turns every `#[allow]` and `#[expect]` of these lints into a
+  compile error, the group-level ones included. That closes the hole above and removes the
+  escape hatch with it: a call that cannot panic can no longer be annotated, only rewritten,
+  and tests cannot be exempted under `--all-targets`.
 - **Clippy only sees what it compiles.** Code behind a `cfg` that is off is not linted. Run it
   for every feature set, target and profile you ship: `--all-features`, `--target`, `--release`.
 - **`no_std`** works unchanged. Entries for a crate that is not linked (`alloc`, `std`) are ignored.
@@ -155,7 +187,10 @@ lists all 34.
 - **Holes in `arithmetic_side_effects`.** It ignores shifts (`a << n`). It misreads two
   literals: `x / -1`, `x * -1` and `0 - x` pass, and each overflows for `MIN`. And it skips
   everything inside a `static` or `const` item, including closures that run later, such as the
-  initializer of a `static LazyLock`.
+  initializer of a `static LazyLock`. For division, the two that panic in every build (`x / -1`,
+  and `/` or `%` inside a `static` or `const`) can be closed: `integer_division_remainder_used`,
+  commented out in `Cargo.toml`, flags every integer division and remainder. It also flags the
+  harmless ones by any other literal, which added up to 12% more findings on the trial crates.
 - **Holes in `indexing_slicing`.** It flags `map[&key]` on an owned `HashMap`, `BTreeMap` or
   `VecDeque` and on a field, but not through a reference. It gives up on an array whose length
   is a const generic (`&buf[..n]` with `buf: &[u8; N]`). It does not look at a generic

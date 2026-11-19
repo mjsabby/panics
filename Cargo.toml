@@ -22,3 +22,9 @@ disallowed_methods = "deny"
 indexing_slicing = "deny"        # v[i], &v[a..b], map[&key]
 string_slice = "deny"            # &s[a..b]
 arithmetic_side_effects = "deny" # + - * / % and unary -, on integers, Duration, Instant, SystemTime
+
+# Optional. `arithmetic_side_effects` lets two kinds of division through that panic in every
+# build: by the literal -1 (`i32::MIN / -1`), and anywhere inside a `static` or `const` item.
+# This lint flags every integer `/` and `%` instead. That includes the harmless ones by any
+# other literal (`n / 2`), which then need a rewrite or an `#[expect]`.
+# integer_division_remainder_used = "deny"

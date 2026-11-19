@@ -190,7 +190,7 @@ disallowed-methods = [
     { path = "core::ops::RemAssign::rem_assign", reason = "operator called by name, which hides it from the operator lints; use a `checked_` method" },
     { path = "core::ops::ShlAssign::shl_assign", reason = "operator called by name, which hides it from the operator lints; use a `checked_` method" },
     { path = "core::ops::ShrAssign::shr_assign", reason = "operator called by name, which hides it from the operator lints; use a `checked_` method" },
-    { path = "core::iter::Iterator::sum", reason = "integer overflow panics when overflow checks are on, a sum of `Duration`s in every build; use `try_fold` with a checked operation (`fold` for floats)" },
+    { path = "core::iter::Iterator::sum", reason = "integer overflow panics when overflow checks are on, a sum of `Duration`s in every build; use `try_fold` with `checked_add` (hot loop: `fold` into a wider type; floats: `fold`)" },
     { path = "core::iter::Iterator::product", reason = "integer overflow panics when overflow checks are on; use `try_fold` with a checked operation (`fold` for floats)" },
     { path = "core::iter::Sum::sum", reason = "integer overflow panics when overflow checks are on, a sum of `Duration`s in every build; use `try_fold` with `checked_add`" },
     { path = "core::iter::Product::product", reason = "integer overflow panics when overflow checks are on; use `try_fold` with `checked_mul`" },
