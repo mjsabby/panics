@@ -33,7 +33,7 @@ pub fn unimplemented() { unimplemented!() }
 // `clippy::unimplemented` and `clippy::unreachable` do not see these.
 pub fn panic_in_local_macro() { local_bail!() }
 pub fn panic_in_dependency_macro() { probe_dep::die!() }
-// `const fn` bodies also run at run time. `clippy::panic` skips them.
+// A `const fn` can also be called at run time, so a panic in one counts.
 pub const fn panic_in_const_fn(x: u32) -> u32 { if x == 0 { panic!("boom") } x }
 
 // ── Assertions ──
